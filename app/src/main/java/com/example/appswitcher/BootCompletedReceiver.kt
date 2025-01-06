@@ -1,8 +1,9 @@
-package com.example.appswitcher
+package com.innovo.appswitcher
 
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
@@ -15,7 +16,6 @@ class BootCompletedReceiver : BroadcastReceiver() {
     }
 
     override fun onReceive(context: Context?, intent: Intent?) {
-        Log.d(TAG, "onReceive called")
 
         if (intent?.action == Intent.ACTION_BOOT_COMPLETED) {
             Log.d(TAG, "BOOT_COMPLETED action received")
@@ -36,7 +36,21 @@ class BootCompletedReceiver : BroadcastReceiver() {
         }
     }
 
+    fun getInstalledApps(context: Context): List<AppInfo> {
+        val packageManager = context.packageManager
+        val apps = packageManager.getInstalledApplications(PackageManager.GET_META_DATA)
+
+        return apps.map { app ->
+            AppInfo(
+                name = app.loadLabel(packageManager).toString(), // Human-readable app name
+                packageName = app.packageName, // Package name
+                icon = app.loadIcon(packageManager) // App icon
+            )
+        }
+    }
+
     private fun startOverlayServiceWithPredefinedApps(context: Context) {
+
         val sharedPreferences = context.getSharedPreferences("AppSwitcherPrefs", Context.MODE_PRIVATE)
         val appsJson = sharedPreferences.getString("selectedApps", null)
 
@@ -54,35 +68,63 @@ class BootCompletedReceiver : BroadcastReceiver() {
                 e.printStackTrace()
             }
         }
+    Log.d(TAG,savedApps.size.toString());
+        if (savedApps.isEmpty() || (savedApps.size == 1 && savedApps[0].name == "REBOOT")) {
+            // Add predefined apps if they exist on the device
+            val predefinedApps = mutableListOf(
+                SelectedAppInfo("Elan", "com.homelogic"),
+                SelectedAppInfo("REBOOT", "REBOOT")
+            )
 
-        // Add predefined apps if they don't already exist
-        val predefinedApps = listOf(
-            SelectedAppInfo("Sonos", "com.sonos.arc2"),
-            SelectedAppInfo("Spotify", "com.spotify.music"),
-            SelectedAppInfo("Elan", "com.homelogic"),
-            SelectedAppInfo("Control4", "com.control4.phoenix") ,
-            SelectedAppInfo("REBOOT", "REBOOT")
-        )
+            val packageManager = context.packageManager
 
-        predefinedApps.forEach { predefinedApp ->
-            if (savedApps.none { it.packageName == predefinedApp.packageName }) {
-                savedApps.add(predefinedApp)
+
+
+
+
+
+
+
+
+            predefinedApps.forEach { predefinedApp ->
+                try {
+                    packageManager.getPackageInfo(predefinedApp.packageName, 0) // Check if the app exists
+                    if (savedApps.none { it.packageName == predefinedApp.packageName }) {
+                        savedApps.add(predefinedApp)
+                    }
+                } catch (e: PackageManager.NameNotFoundException) {
+                    Log.d(TAG, "App not installed: ${predefinedApp.packageName}")
+                }
             }
-        }
-
-        // Start the OverlayService
-        val serviceIntent = Intent(context, OverlayService::class.java).apply {
-            putExtra("selectedApps", ArrayList(savedApps))
-        }
-
-        try {
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                context.startForegroundService(serviceIntent)
+            // Ensure "REBOOT" is the last element
+            val rebootApp = savedApps.find { it.packageName == "REBOOT" }
+            if (rebootApp != null) {
+                savedApps.remove(rebootApp) // Remove "REBOOT" if it exists
+                savedApps.add(rebootApp)   // Add "REBOOT" back as the last element
             } else {
-                context.startService(serviceIntent)
+                // Add "REBOOT" if it doesn't exist
+                savedApps.add(SelectedAppInfo("REBOOT", "REBOOT"))
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
+        }
+
+        if (savedApps.isNotEmpty()) {
+
+            // Start the OverlayService with the savedApps list
+            val serviceIntent = Intent(context, OverlayService::class.java).apply {
+                putExtra("selectedApps", ArrayList(savedApps))
+            }
+
+            try {
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                    context.startForegroundService(serviceIntent)
+                } else {
+                    context.startService(serviceIntent)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        } else {
+            Log.d(TAG, "Service not started. No apps available in 'savedApps'.")
         }
     }
 }

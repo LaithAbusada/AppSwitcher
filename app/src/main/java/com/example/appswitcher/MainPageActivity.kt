@@ -1,4 +1,4 @@
-package com.example.appswitcher
+package com.innovo.appswitcher
 
 import android.content.Context
 import android.content.Intent
@@ -38,6 +38,8 @@ import androidx.compose.ui.unit.sp
 import android.provider.Settings
 import androidx.activity.viewModels
 import androidx.lifecycle.ViewModel
+import com.innovo.appswitcher.BuildConfig
+import com.innovo.appswitcher.R
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
@@ -83,7 +85,7 @@ class MainPageActivity : ComponentActivity() {
 
 
 
-                    val storedPin = sharedPreferences.getString("PIN", "1234") ?: "1234"
+                    val storedPin = sharedPreferences.getString("PIN", "3526") ?: "3526"
                     if (pinEntered == storedPin) {
 
                         val rememberMeChecked = sharedPreferences.getBoolean("RememberMe", false)
@@ -99,33 +101,21 @@ class MainPageActivity : ComponentActivity() {
                 },
                 onRebootClick = {
                     try {
-                        val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
-                        powerManager.reboot(null)
-                    } catch (e: SecurityException) {
-                        e.printStackTrace()
-                        Toast.makeText(this, "Reboot failed. Ensure the app has system-level permissions.", Toast.LENGTH_SHORT).show()
+                        val process = Runtime.getRuntime().exec(arrayOf("su", "-c", "reboot"))
+                        process.waitFor()
                     } catch (e: Exception) {
                         e.printStackTrace()
-                        Toast.makeText(this, "Reboot failed due to an unknown error.", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this, "Reboot failed. Root access might be required.", Toast.LENGTH_SHORT).show()
                     }
                 },
                 onPinChange = { newPin ->
                     sharedPreferences.edit().putString("PIN", newPin).apply()
                 },
-                onRememberMeToggle = { isChecked, pinToRemember ->
-                    sharedPreferences.edit()
-                        .putBoolean("RememberMe", isChecked)
-                        .putString("RememberedPIN", if (isChecked) pinToRemember else null)
-                        .apply()
-                },
+
                 onExitAppClick = {
                     Toast.makeText(this, "Exiting app...", Toast.LENGTH_SHORT).show()
-                    val stopOverlayServiceIntent = Intent(this, OverlayService::class.java)
-                    stopService(stopOverlayServiceIntent)
                     finishAffinity()
                 },
-                rememberedPin = rememberedPin ?: "",
-                isRememberMeChecked = isRememberMeChecked,
                 sharedPreferences = sharedPreferences
             )
 
@@ -179,15 +169,11 @@ fun MainPageScreen(
     onSettingsPageClick: (String) -> Unit,
     onRebootClick: () -> Unit,
     onPinChange: (String) -> Unit,
-    onRememberMeToggle: (Boolean, String) -> Unit,
     onExitAppClick: () -> Unit,
-    rememberedPin: String,
-    isRememberMeChecked: Boolean,
     sharedPreferences: SharedPreferences
 ) {
-    // Initialize the PIN code state based on the "Remember Me" checkbox
-    var pinCode by remember { mutableStateOf(if (isRememberMeChecked) rememberedPin else "") }
-    var rememberMeChecked by remember { mutableStateOf(isRememberMeChecked) }
+    // Initialize the PIN code state
+    var pinCode by remember { mutableStateOf("") }
     var showChangePinDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
@@ -204,7 +190,7 @@ fun MainPageScreen(
     ) {
         // App Logo
         Image(
-            painter = painterResource(id = R.mipmap.ic_innovo_big),
+            painter = painterResource(id = R.drawable.innovo_new),
             contentDescription = "Innovo Logo",
             modifier = Modifier
                 .width(200.dp)
@@ -254,30 +240,15 @@ fun MainPageScreen(
             }
         }
 
-        // Remember Me and Change PIN Section
+        // Change PIN Section
         Row(
             modifier = Modifier
                 .fillMaxWidth(0.9f)
                 .padding(vertical = 0.dp)
                 .height(20.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.Center
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(
-                    checked = rememberMeChecked,
-                    onCheckedChange = { isChecked ->
-                        rememberMeChecked = isChecked
-                        if (!isChecked) {
-                            // Clear remembered PIN if unchecked
-                            sharedPreferences.edit().remove("RememberedPIN").apply()
-                        }
-                        onRememberMeToggle(isChecked, pinCode)
-                    }
-                )
-                Text("Remember Me", fontSize = 14.sp, color = Color.White)
-            }
-
             Text(
                 text = "Change PIN Code",
                 fontSize = 14.sp,
@@ -302,7 +273,7 @@ fun MainPageScreen(
         // Show Change PIN Dialog
         if (showChangePinDialog) {
             ChangePinDialog(
-                currentPinStored = sharedPreferences.getString("PIN", "1234") ?: "1234",
+                currentPinStored = sharedPreferences.getString("PIN", "3526") ?: "3526",
                 onDismissRequest = { showChangePinDialog = false },
                 onPinChangeSuccess = { newPin ->
                     sharedPreferences.edit().putString("PIN", newPin).apply()
@@ -324,7 +295,6 @@ fun MainPageScreen(
         )
 
         // Reboot and Exit App Buttons
-        RebootButton(onClick = onRebootClick)
         ExitAppSwitcherButton(onClick = onExitAppClick)
 
         // Footer Links
@@ -333,20 +303,10 @@ fun MainPageScreen(
             horizontalArrangement = Arrangement.Center
         ) {
             Text(
-                text = "Visit Innovo for all your automation needs: ",
+                text = "App Switcher (Version: ${BuildConfig.VERSION_NAME})",
                 fontSize = 12.sp,
                 color = Color.Gray,
-                fontWeight = FontWeight.Medium
-            )
-            Text(
-                text = "innovo.net",
-                fontSize = 12.sp,
-                color = Color.Yellow,
-                textDecoration = TextDecoration.Underline,
-                modifier = Modifier.clickable {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://innovo.net"))
-                    context.startActivity(intent)
-                }
+                fontWeight = FontWeight.Medium,
             )
         }
     }

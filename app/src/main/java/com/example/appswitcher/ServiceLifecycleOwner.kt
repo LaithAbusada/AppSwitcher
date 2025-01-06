@@ -1,3 +1,6 @@
+package com.innovo.appswitcher
+
+
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry

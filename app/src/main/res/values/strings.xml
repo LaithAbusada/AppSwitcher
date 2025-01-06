@@ -2,5 +2,5 @@
     <string name="app_name">AppSwitcher</string>
     <string name="title_activity_choose_apps">ChooseAppsActivity</string>
     <string name="title_activity_overlay">OverlayActivity</string>
-    <string name="title_activity_main_page">MainPageActivity</string>
+    <string name="title_activity_main_page">AppSwitcher</string>
 </resources>

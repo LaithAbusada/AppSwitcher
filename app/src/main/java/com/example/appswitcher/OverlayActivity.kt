@@ -1,4 +1,4 @@
-package com.example.appswitcher
+package com.innovo.appswitcher
 
 import android.content.Intent
 import android.graphics.Color
@@ -16,6 +16,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
+import com.innovo.appswitcher.R
 
 class OverlayActivity : ComponentActivity() {
 

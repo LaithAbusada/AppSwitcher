@@ -1,4 +1,4 @@
-package com.example.appswitcher
+package com.innovo.appswitcher
 
 import org.junit.Test
 

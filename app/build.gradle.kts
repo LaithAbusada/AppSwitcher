@@ -5,15 +5,15 @@ plugins {
 }
 
 android {
-    namespace = "com.example.appswitcher"
+    namespace = "com.innovo.appswitcher"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.example.appswitcher"
+        applicationId = "com.innovo.appswitcher"
         minSdk = 28
         targetSdk = 35
         versionCode = 1
-        versionName = "1.0"
+        versionName = "1.8"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -34,7 +34,10 @@ android {
     kotlinOptions {
         jvmTarget = "11"
     }
+    android.buildFeatures.buildConfig = true
+
     buildFeatures {
+        buildConfig = true
         compose = true
     }
 }

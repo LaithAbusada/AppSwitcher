@@ -1,4 +1,4 @@
-package com.example.appswitcher
+package com.innovo.appswitcher
 
 import android.content.Context
 import android.content.Intent
@@ -76,8 +76,8 @@ fun SystemAlertWindowPermissionDialog(
                     Button(
                         onClick = onDismiss,
                         modifier = Modifier
-                            .width(130.dp) // Explicit width for the button
-                            .height(50.dp), // Ensure enough height for text
+                            .weight(1f) // Take half of the row
+                            .height(50.dp), // Ensure enough height for the buttons
                         shape = RoundedCornerShape(8.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color(0xFF4E4E50), // Neutral gray
@@ -86,8 +86,9 @@ fun SystemAlertWindowPermissionDialog(
                     ) {
                         Text(
                             text = "Dismiss",
-                            fontSize = 14.sp, // Text size that fits
-                            maxLines = 1 // Ensure single-line text
+                            fontSize = 14.sp,
+                            maxLines = 1, // Single-line text
+                            textAlign = TextAlign.Center // Center-align text inside the button
                         )
                     }
 
@@ -95,8 +96,8 @@ fun SystemAlertWindowPermissionDialog(
                     Button(
                         onClick = onGoToAppSettingsClick,
                         modifier = Modifier
-                            .width(160.dp) // Slightly wider button to fit "Go to Settings"
-                            .height(50.dp), // Ensure enough height for text
+                            .weight(1f) // Take half of the row
+                            .height(50.dp), // Ensure enough height for the buttons
                         shape = RoundedCornerShape(8.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color(0xFFFFD700), // Gold
@@ -105,8 +106,9 @@ fun SystemAlertWindowPermissionDialog(
                     ) {
                         Text(
                             text = "Settings",
-                            fontSize = 14.sp, // Text size that fits
-                            maxLines = 1 // Ensure single-line text
+                            fontSize = 14.sp,
+                            maxLines = 1, // Single-line text
+                            textAlign = TextAlign.Center // Center-align text inside the button
                         )
                     }
                 }

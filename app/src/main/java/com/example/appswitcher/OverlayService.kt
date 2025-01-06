@@ -1,4 +1,4 @@
-package com.example.appswitcher
+package com.innovo.appswitcher
 
 import android.annotation.SuppressLint
 import android.app.Notification
@@ -6,16 +6,23 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.PixelFormat
+import android.graphics.drawable.AdaptiveIconDrawable
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.provider.Settings
 import android.util.Log
 import android.view.Gravity
 import android.view.View
+import android.view.View.OVER_SCROLL_NEVER
 import android.view.ViewGroup
 import android.view.ViewOutlineProvider
 import android.view.WindowManager
@@ -29,6 +36,8 @@ import android.widget.Toast
 import androidx.appcompat.content.res.AppCompatResources
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import androidx.drawerlayout.widget.DrawerLayout
+import com.innovo.appswitcher.R
 import kotlin.math.absoluteValue
 
 class OverlayService : Service() {
@@ -44,9 +53,11 @@ class OverlayService : Service() {
     private val NOTIFICATION_ID = 1
     private var clickCounter = 0
     private var lastClickTime = 0L
-    private val CLICK_THRESHOLD = 10_000L // 10 seconds in milliseconds
+    private val CLICK_THRESHOLD = 6000L // 6 seconds in milliseconds
     private val REQUIRED_CLICKS = 9
     private var sequenceStartTime = 0L
+    private var isTimerRunning = false
+
 
 
     override fun onBind(intent: Intent?): IBinder? {
@@ -72,6 +83,8 @@ class OverlayService : Service() {
             intent?.getSerializableExtra("selectedApps") as? ArrayList<SelectedAppInfo>
         }
 
+        val isDiscreteMode = intent?.getBooleanExtra("isDiscreteMode", false) ?: false
+
         if (selectedApps.isNullOrEmpty()) {
             Log.d("OverlayService", "No selected apps received")
             stopSelf()
@@ -84,7 +97,7 @@ class OverlayService : Service() {
             Toast.makeText(this, "Overlay permission is required.", Toast.LENGTH_SHORT).show()
             stopSelf()
         } else {
-            setupOverlay(selectedApps!!)
+            setupOverlay(selectedApps!!, isDiscreteMode)
         }
 
         return START_STICKY
@@ -108,23 +121,25 @@ class OverlayService : Service() {
         }
     }
 
-    private fun setupOverlay(selectedApps: List<SelectedAppInfo>) {
+    private fun setupOverlay(selectedApps: List<SelectedAppInfo>, isDiscreteMode : Boolean) {
         clearExistingOverlays()
 
         overlayButton = ImageButton(this).apply {
-            setBackgroundResource(R.drawable.half_circle) // Use the half-circle drawable
+            setBackgroundResource(if (isDiscreteMode) R.drawable.half_circle_discrete else R.drawable.half_circle)
             setOnClickListener {
                 toggleIconsVisibility()
             }
             layoutParams = ViewGroup.LayoutParams(25, 50) // Match the drawable dimensions
+            alpha = if (isDiscreteMode) 0.10f else 0.6f // 15% opacity for discrete mode, 60% otherwise
+
         }
 
         val overlayButtonParams = createOverlayParams(Gravity.TOP or Gravity.START).apply {
-
-
             val displayMetrics = resources.displayMetrics
-            x = displayMetrics.widthPixels - width
-            y = displayMetrics.heightPixels / 2 - (height / 2)
+
+            // Calculate position for bottom-right corner
+            x = displayMetrics.widthPixels - width // Align to the right edge
+            y = displayMetrics.heightPixels - height // Align to the bottom edge
         }
 
         overlayButton.setOnTouchListener(@SuppressLint("ClickableViewAccessibility")
@@ -175,8 +190,11 @@ class OverlayService : Service() {
 
                         // Update background based on edge
                         overlayButton.setBackgroundResource(
-                            if (snapToLeft) R.drawable.half_circle_left else R.drawable.half_circle
-                        )
+                            if (snapToLeft) {
+                                if (isDiscreteMode) R.drawable.half_circle_left_discrete else R.drawable.half_circle_left
+                            } else {
+                                if (isDiscreteMode) R.drawable.half_circle_discrete else R.drawable.half_circle
+                            }                        )
 
                         // Snap the button to the nearest edge (left or right)
                         overlayButtonParams.x = if (snapToLeft) {
@@ -227,7 +245,7 @@ class OverlayService : Service() {
                     100f, 100f  // Bottom-left radius
                 )
             }
-            setPadding(15, 0, 15, 0) // Left, top, right, bottom padding
+            setPadding(35, 0, 35, 0) // Left, top, right, bottom padding
 
             visibility = View.GONE
         }
@@ -238,11 +256,21 @@ class OverlayService : Service() {
         setupMenuIcons(selectedApps)
     }
 
+    private fun dpToPx(dp: Int): Int {
+        return (dp * resources.displayMetrics.density).toInt()
+    }
+
     private fun setupMenuIcons(selectedApps: List<SelectedAppInfo>) {
         containerView.removeAllViews()
 
-        val iconSize = 150
-        val spacing = 20
+        val displayMetrics = resources.displayMetrics
+        val screenWidth = displayMetrics.widthPixels
+        val screenHeight = displayMetrics.heightPixels
+
+        // Calculate dynamic icon size (e.g., 10% of screen width)
+        val iconSize = (screenWidth * 0.2).toInt() // 10% of screen width
+        val spacing = dpToPx(10) // Space between icons
+        val padding = dpToPx(100) // Padding for the rowLayout
 
         // Create a HorizontalScrollView to enable horizontal scrolling
         val horizontalScrollView = HorizontalScrollView(this).apply {
@@ -250,7 +278,13 @@ class OverlayService : Service() {
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT
             )
+            isHorizontalScrollBarEnabled = false // Disables the horizontal scrollbar
+            clipToPadding = true
+            overScrollMode = OVER_SCROLL_NEVER // Disables the stretch/overscroll effect
+
         }
+
+
 
         // Create a horizontal LinearLayout for the app icons
         val rowLayout = LinearLayout(this).apply {
@@ -260,21 +294,36 @@ class OverlayService : Service() {
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT
             )
+
         }
 
+
         selectedApps.forEach { app ->
-            val iconDrawable = getAppIcon(app.packageName)
+            val originalDrawable = getAppIcon(app.packageName) ?: getDrawable(R.mipmap.ic_launcher)
+
+            // Convert the drawable to a resized BitmapDrawable
+            val iconDrawable = originalDrawable?.let {
+                val resizedBitmap = drawableToBitmap(it, iconSize - (iconSize * 0.4).toInt()) // Resize to 90% of iconSize
+                BitmapDrawable(resources, resizedBitmap)
+            }
+
 
             // Create a circular ImageButton with a yellow border
             val iconButton = ImageButton(this).apply {
+                layoutParams = LinearLayout.LayoutParams(iconSize, iconSize).apply {
+                    setMargins(spacing, spacing, spacing, spacing) // Add consistent spacing between icons
+                }
                 setImageDrawable(iconDrawable ?: getDrawable(R.mipmap.ic_launcher)) // Set app icon or default
+
                 background = GradientDrawable().apply {
                     shape = GradientDrawable.OVAL // Circular shape
                     setColor(Color.TRANSPARENT) // Transparent background inside the button
                     setStroke(4, Color.parseColor("#FFFAEB00")) // Yellow border
                 }
-                setPadding(16, 16, 16, 16) // Optional padding to center the icon
-                scaleType = ImageView.ScaleType.CENTER_INSIDE // Ensure icon scales correctly
+                adjustViewBounds = true
+                scaleType = ImageView.ScaleType.CENTER_INSIDE// Ensure the image fits within the button bounds
+                setPadding(dpToPx(8), dpToPx(8), dpToPx(8), dpToPx(8)) // Add padding inside the button
+
 
                 if (app.packageName == "REBOOT") {
                     // Handle long press for REBOOT
@@ -296,9 +345,24 @@ class OverlayService : Service() {
                                     longPressHandler.removeCallbacks(longPressRunnable) // Cancel long press detection
                                     if (!isLongPress) {
                                         // Handle normal click
-                                        handleNineClickSequence {
-                                            showAppSwitcher() // Show your app after 9 clicks
+                                        if (!isTimerRunning) {
+                                            // Start the 7-second timer on the first click
+                                            isTimerRunning = true
+                                            sequenceStartTime = System.currentTimeMillis()
+                                            clickCounter = 1 // Count the first click
+
+                                            // Start a handler to evaluate clicks after 7 seconds
+                                            Handler(Looper.getMainLooper()).postDelayed({
+                                                validateClicks {
+                                                    openApp() // Show your app after 9 clicks
+                                                }
+                                                isTimerRunning = false // Reset the timer flag
+                                            }, CLICK_THRESHOLD)
+                                        } else {
+                                            // Increment the click counter for subsequent clicks
+                                            clickCounter++
                                         }
+
                                     }
                                 }
                             }
@@ -309,6 +373,7 @@ class OverlayService : Service() {
                     // Handle normal app icon clicks
                     setOnClickListener {
                         openApp(app.packageName)
+                        toggleIconsVisibility()  // Hide the drawer
                     }
                 }
             }
@@ -334,6 +399,40 @@ class OverlayService : Service() {
         // Add the HorizontalScrollView to the containerView
         containerView.addView(horizontalScrollView)
     }
+    private fun drawableToBitmap(drawable: Drawable, size: Int): Bitmap {
+        return if (drawable is BitmapDrawable) {
+            // Resize the existing bitmap if it doesn't match the required size
+            val originalBitmap = drawable.bitmap
+            if (originalBitmap.width != size || originalBitmap.height != size) {
+                Bitmap.createScaledBitmap(originalBitmap, size, size, true)
+            } else {
+                originalBitmap
+            }
+        } else if (drawable is AdaptiveIconDrawable) {
+            // Handle AdaptiveIconDrawable
+            val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(bitmap)
+            drawable.setBounds(0, 0, size, size)
+            drawable.draw(canvas)
+            bitmap
+        } else {
+            // Fallback for other drawable types
+            val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(bitmap)
+            drawable.setBounds(0, 0, size, size)
+            drawable.draw(canvas)
+            bitmap
+        }
+    }
+
+    private fun validateClicks(action: () -> Unit) {
+        if (clickCounter == REQUIRED_CLICKS) {
+            action() // Perform the action (open the app)
+        }
+        // Reset the state regardless of success or failure
+        sequenceStartTime = 0L
+        clickCounter = 0
+    }
 
     private fun openApp(packageName: String) {
         try {
@@ -349,7 +448,8 @@ class OverlayService : Service() {
         }
     }
 
-    private fun toggleIconsVisibility() {
+    private fun
+            toggleIconsVisibility() {
         iconsVisible = !iconsVisible
 
         // Get the location of the overlayButton on the screen
@@ -504,6 +604,8 @@ class OverlayService : Service() {
 
 
     private fun handleNineClickSequence(action: () -> Unit) {
+        Log.d("TestButton","in nine clicks");
+
         val currentTime = System.currentTimeMillis()
 
         // Start the sequence timer on the first click
@@ -517,11 +619,24 @@ class OverlayService : Service() {
         if (clickCounter == REQUIRED_CLICKS && currentTime - sequenceStartTime <= CLICK_THRESHOLD) {
             clickCounter = 0 // Reset counter
             sequenceStartTime = 0L // Reset the sequence timer
-            action() // Perform the desired action
+openApp()
         } else if (currentTime - sequenceStartTime > CLICK_THRESHOLD) {
             // Reset if the time exceeds the threshold during the sequence
             clickCounter = 0
             sequenceStartTime = 0L
+        }
+    }
+
+
+    private fun openApp() {
+        try {
+            val mainActivityIntent = Intent(this, MainPageActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+            }
+            startActivity(mainActivityIntent)
+        } catch (e: Exception) {
+            Log.e("OverlayService", "Error opening the app", e)
+            Toast.makeText(this, "Error opening the app.", Toast.LENGTH_SHORT).show()
         }
     }
 
